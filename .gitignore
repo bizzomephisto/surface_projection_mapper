@@ -1,0 +1,25 @@
+node_modules/
+dist/
+test-results/
+*.log
+release/
+
+# Local credentials and tool state
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+*.pem
+*.key
+
+# User projects and imported media
+*.surface.json
+*.assets/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,48 @@
+{
+  "name": "surface-projection",
+  "version": "0.5.2",
+  "private": true,
+  "description": "Direct surface projection mapping for Linux and Windows",
+  "main": "electron/main.cjs",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/core.test.mjs",
+    "test:desktop": "node tests/desktop.cjs",
+    "pack": "electron-builder --dir",
+    "dist:linux": "electron-builder --linux AppImage",
+    "dist:windows": "electron-builder --win nsis",
+    "vendor": "node scripts/vendor.mjs"
+  },
+  "build": {
+    "appId": "studio.surface.projection",
+    "productName": "Surface",
+    "directories": {
+      "output": "release/0.5.2"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": "AppImage",
+      "category": "Graphics"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "polygon-clipping": "^0.15.7"
+  }
+}
