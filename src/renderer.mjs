@@ -1,14 +1,16 @@
+import {drawPreset,presetFootprint} from './presets.mjs';
 import {LED_EFFECTS,ledGeometry,paletteColors,animationTime} from './led.mjs';
 import {LED_VERTEX,LED_FRAGMENT} from './led-shaders.mjs';
 import {geometry,meshPoint,maskRegions,outlineSettings,outlineGeometry} from './core.mjs';
 const VS=`attribute vec2 a_position;attribute vec3 a_uvq;varying vec3 v_uvq;void main(){gl_Position=vec4(a_position,0.,1.);v_uvq=a_uvq;}`;
-const FS=`precision mediump float;uniform sampler2D u_texture;uniform float u_opacity;uniform float u_brightness;varying vec3 v_uvq;void main(){vec4 c=texture2D(u_texture,v_uvq.xy/v_uvq.z);gl_FragColor=vec4(c.rgb*u_brightness,c.a*u_opacity);}`;
+const FS=`precision mediump float;uniform sampler2D u_texture;uniform float u_opacity;uniform float u_brightness;uniform float u_premultiplied;varying vec3 v_uvq;void main(){vec4 c=texture2D(u_texture,v_uvq.xy/v_uvq.z);gl_FragColor=vec4(c.rgb*u_brightness*mix(1.,u_opacity,u_premultiplied),c.a*u_opacity);}`;
 export class ProjectionRenderer {
   constructor(canvas,onError=()=>{}){
     this.canvas=canvas;this.onError=onError;this.media=new Map();this.surfaces=new Map();this.project=null;this.lastFrame=0;
     const gl=this.gl=canvas.getContext('webgl',{alpha:false,antialias:true,stencil:true,preserveDrawingBuffer:true});
     if(!gl)throw new Error('GPU rendering is unavailable. Enable hardware acceleration and restart Surface.');
     this.maxAttributes=gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+    this.maxTextureSize=gl.getParameter(gl.MAX_TEXTURE_SIZE);this.anisotropy=gl.getExtension('EXT_texture_filter_anisotropic');this.anisotropyLevel=this.anisotropy?Math.min(4,gl.getParameter(this.anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT)):1;
     const shader=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
     const program=this.program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,VS));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FS));gl.linkProgram(program);
     if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
@@ -16,7 +18,7 @@ export class ProjectionRenderer {
     const ledProgram=this.ledProgram=gl.createProgram();gl.attachShader(ledProgram,shader(gl.VERTEX_SHADER,LED_VERTEX));gl.attachShader(ledProgram,shader(gl.FRAGMENT_SHADER,LED_FRAGMENT));gl.linkProgram(ledProgram);if(!gl.getProgramParameter(ledProgram,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(ledProgram));
     this.ledAttributes=['a_position','a_index','a_strength'].map(n=>gl.getAttribLocation(ledProgram,n));this.ledUniforms=Object.fromEntries(['time','count','speed','intensity','opacity','brightness','grouping','spacing','reverse','mirror','effect','color0','color1','color2'].map(n=>[n,gl.getUniformLocation(ledProgram,'u_'+n)]));
     gl.useProgram(program);this.position=gl.getAttribLocation(program,'a_position');this.uvq=gl.getAttribLocation(program,'a_uvq');
-    this.opacity=gl.getUniformLocation(program,'u_opacity');this.brightness=gl.getUniformLocation(program,'u_brightness');
+    this.opacity=gl.getUniformLocation(program,'u_opacity');this.brightness=gl.getUniformLocation(program,'u_brightness');this.premultiplied=gl.getUniformLocation(program,'u_premultiplied');
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,1);
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.onError('GPU context lost. Save your project and restart Surface.');});
     this.frame=requestAnimationFrame(t=>this.animate(t));
@@ -66,6 +68,25 @@ export class ProjectionRenderer {
     const aspect=s.contentAspect||16/9,w=aspect>=1?1280:Math.max(1,Math.round(1280*aspect)),h=aspect>=1?Math.max(1,Math.round(1280/aspect)):1280;
     if(r.canvas.width!==w||r.canvas.height!==h){r.canvas.width=w;r.canvas.height=h;r.dirty=true;r.uploadDirty=true;}
   }
+  uploadTexture(s,r){
+    const gl=this.gl,mipmapped=s.layers.some(l=>l.type==='preset');let source=r.canvas;
+    if(mipmapped){
+      // WebGL 1 needs power-of-two textures for mipmaps. Resample the full
+      // composition to fill that texture so the existing UVs/aspect stay intact.
+      if(!r.mipmapCanvas){r.mipmapCanvas=document.createElement('canvas');r.mipmapContext=r.mipmapCanvas.getContext('2d');}
+      const size=n=>Math.min(this.maxTextureSize,2**Math.ceil(Math.log2(n))),w=size(source.width),h=size(source.height);
+      if(r.mipmapCanvas.width!==w||r.mipmapCanvas.height!==h){r.mipmapCanvas.width=w;r.mipmapCanvas.height=h;}
+      const ctx=r.mipmapContext;ctx.clearRect(0,0,w,h);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(source,0,0,w,h);source=r.mipmapCanvas;
+    }else if(r.mipmapCanvas){r.mipmapCanvas.width=1;r.mipmapCanvas.height=1;delete r.mipmapCanvas;delete r.mipmapContext;}
+    // Average premultiplied colors so transparent strokes keep their brightness.
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,mipmapped);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);r.premultiplied=mipmapped;
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,mipmapped?gl.LINEAR_MIPMAP_LINEAR:gl.LINEAR);
+    if(this.anisotropy)gl.texParameterf(gl.TEXTURE_2D,this.anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,mipmapped?this.anisotropyLevel:1);
+    if(mipmapped)gl.generateMipmap(gl.TEXTURE_2D);
+    r.uploaded=true;r.uploadDirty=false;
+  }
   grid(ctx,w,h,label,mesh=null){
     ctx.fillStyle='#0c2021';ctx.fillRect(0,0,w,h);ctx.lineWidth=2;ctx.strokeStyle='#51e2bc';ctx.beginPath();
     const divisions=mesh?.divisions||10;for(let x=0;x<=w;x+=w/divisions){ctx.moveTo(x,0);ctx.lineTo(x,h);}for(let y=0;y<=h;y+=h/divisions){ctx.moveTo(0,y);ctx.lineTo(w,y);}ctx.stroke();
@@ -82,6 +103,7 @@ export class ProjectionRenderer {
       if(!l.visible)continue;ctx.save();ctx.globalAlpha=l.opacity;
       ctx.translate(w/2+l.x*w,h/2+l.y*h);ctx.rotate((l.rotation||0)*Math.PI/180);ctx.scale(l.scale*(l.scaleX??1)*(l.mirrorX?-1:1),l.scale*(l.scaleY??1)*(l.mirrorY?-1:1));ctx.translate(-w/2,-h/2);
       if(l.type==='grid')this.grid(ctx,w,h,s.name,s.mesh);
+      else if(l.type==='preset')drawPreset(ctx,w,h,l.animation,animationTime(p)/1000,presetFootprint(s,l,p.width,p.height,meshPoint));
       else if(l.type==='color'){ctx.fillStyle=l.color;ctx.fillRect(0,0,w,h);}
       else if(l.type==='text'){
         ctx.fillStyle=l.color;ctx.font=`600 ${l.fontSize}px ${l.font}`;ctx.textAlign=l.align;ctx.textBaseline='middle';
@@ -129,19 +151,16 @@ export class ProjectionRenderer {
     gl.useProgram(this.program);
     for(const s of p.surfaces){
       if(!s.visible||(p.isolate&&p.isolate!==s.id))continue;
-      const r=this.resource(s);if(s.led){this.drawLED(s,r);continue;}gl.useProgram(this.program);const video=s.layers.some(l=>l.visible&&l.type==='video');
-      if(r.dirty||video)this.compose(s,r);
+      const r=this.resource(s);if(s.led){this.drawLED(s,r);continue;}gl.useProgram(this.program);const video=s.layers.some(l=>l.visible&&l.type==='video'),animated=s.layers.some(l=>l.visible&&l.type==='preset'&&!l.animation.paused)&&p.playing&&!p.calibration;
+      if(r.dirty||video||animated)this.compose(s,r);
       gl.bindTexture(gl.TEXTURE_2D,r.texture);
-      if(r.uploaded!==true||video||r.uploadDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,r.canvas);r.uploaded=true;r.uploadDirty=false;}
-      // A fresh composition must also refresh the GPU texture.
-      const key=JSON.stringify([s,p.calibration]);
-      if(r.key!==key){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,r.canvas);r.key=key;}
+      if(r.uploaded!==true||r.uploadDirty)this.uploadTexture(s,r);
       const shapeKey=JSON.stringify([s.corners,s.mesh]);
       gl.bindBuffer(gl.ARRAY_BUFFER,r.buffer);
       if(r.shapeKey!==shapeKey){const verts=geometry(s);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.DYNAMIC_DRAW);r.count=verts.length/5;r.shapeKey=shapeKey;}
       gl.enableVertexAttribArray(this.position);gl.vertexAttribPointer(this.position,2,gl.FLOAT,false,20,0);
       gl.enableVertexAttribArray(this.uvq);gl.vertexAttribPointer(this.uvq,3,gl.FLOAT,false,20,8);
-      gl.uniform1f(this.opacity,s.opacity);gl.uniform1f(this.brightness,s.brightness);gl.drawArrays(gl.TRIANGLES,0,r.count);this.drawOutline(s,r);
+      gl.uniform1f(this.opacity,s.opacity);gl.uniform1f(this.brightness,s.brightness);gl.uniform1f(this.premultiplied,r.premultiplied?1:0);gl.blendFunc(r.premultiplied?gl.ONE:gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,r.count);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);this.drawOutline(s,r);
     }
   }
 }

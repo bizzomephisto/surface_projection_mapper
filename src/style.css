@@ -15,3 +15,5 @@ body{user-select:none}input,textarea{user-select:text}.surface-row.active{border
 #overlay .handle.tangent{fill:#483720;stroke:#ffce80}.led-panel{background:#1d2927}.led-panel h3{color:var(--accent)}.led-panel select{width:100%}#led-count{color:var(--accent);font-family:monospace}.led-panel .inspector-actions{margin-bottom:10px}
 
 body:not(.minimal) .canvas-toolbar .tool span{display:none}
+
+.preset-library{flex-shrink:0;border-top:1px solid var(--line)}.preset-library .panel-heading{height:38px}.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px}.preset-grid button{font-size:10px;padding:8px 4px}#preset-text{min-height:160px;font-family:monospace;font-size:10px}

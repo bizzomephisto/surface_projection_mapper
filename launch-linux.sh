@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 cd -- "$(dirname -- "$0")"
-if [[ -x release/0.5.2/linux-unpacked/surface-projection ]]; then
-  exec ./release/0.5.2/linux-unpacked/surface-projection "$@"
+if [[ -x release/0.6.2/linux-unpacked/surface-projection ]]; then
+  exec ./release/0.6.2/linux-unpacked/surface-projection "$@"
 elif [[ -x node_modules/.bin/electron ]]; then
   exec ./node_modules/.bin/electron . "$@"
 else

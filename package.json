@@ -1,6 +1,6 @@
 {
   "name": "surface-projection",
-  "version": "0.5.2",
+  "version": "0.6.2",
   "private": true,
   "description": "Direct surface projection mapping for Linux and Windows",
   "main": "electron/main.cjs",
@@ -13,13 +13,14 @@
     "pack": "electron-builder --dir",
     "dist:linux": "electron-builder --linux AppImage",
     "dist:windows": "electron-builder --win nsis",
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "test:rendering": "node tests/rendering.cjs"
   },
   "build": {
     "appId": "studio.surface.projection",
     "productName": "Surface",
     "directories": {
-      "output": "release/0.5.2"
+      "output": "release/0.6.2"
     },
     "files": [
       "electron/**/*",

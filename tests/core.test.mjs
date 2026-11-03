@@ -114,3 +114,22 @@ test('legacy connected joined masks convert to editable LED paths without losing
  makeBezier(path,0);assert.equal(path.nodes[0].mode,'bezier');delete s.led;assert.equal(s.holes.length,1);assert.deepEqual(s.layers,layers);
  const multi=clone(s);delete multi.path;multi.regions=[{outline:clone(s.mask),holes:[]},{outline:clone(s.mask),holes:[]}];const unchanged=clone(multi);assert.throws(()=>ensurePath(multi),/disconnected/);assert.deepEqual(multi,unchanged);
 });
+
+test('animated presets validate and retime without jumps across pause, speed, and global transport',async()=>{
+ const {PRESETS,presetDefaults,validatePreset,presetTime,retimePreset,presetValue,resetPresetClocks}=await import('../src/presets.mjs');
+ for(const[id]of PRESETS){const l=newLayer('preset');l.animation=presetDefaults(id);assert.ok(validatePreset(l.animation));const p=newProject();p.surfaces=[newSurface()];p.surfaces[0].layers=[l];validateProject(JSON.parse(JSON.stringify(p)));}
+ const c=presetDefaults();near(presetTime(c,10),10);retimePreset(c,10,{speed:2});near(presetTime(c,11),12);retimePreset(c,11,{paused:true});near(presetTime(c,100),12);retimePreset(c,100,{paused:false});near(presetTime(c,101),14);
+ c.min=20;c.max=40;for(let i=0;i<100;i++)assert.ok(presetValue(c,i)>=20&&presetValue(c,i)<=40);c.auto=false;c.value=73;near(presetValue(c,0),73);
+ const p=newProject();p.surfaces=[newSurface()];const l=newLayer('preset');l.animation=c;p.surfaces[0].layers=[l];resetPresetClocks(p);near(c.anchor,0);near(c.offset,0);
+ for(const patch of [{preset:'unknown'},{speed:Infinity},{min:80,max:10},{detail:5.5},{text:'x'.repeat(12001)},{color:'red'}])assert.equal(Boolean(validatePreset({...presetDefaults(),...patch})),false);
+ l.animation={...presetDefaults(),speed:0};assert.throws(()=>validateProject(p),/preset/);
+});
+
+test('compact preset layout follows projected item size and supports old settings',async()=>{
+ const {presetDefaults,presetLayout,presetFootprint,validatePreset}=await import('../src/presets.mjs');
+ const c=presetDefaults(),s=newSurface(),l=newLayer('preset');assert.equal(presetLayout(c,presetFootprint(s,l,1920,1080,meshPoint)),'detailed');
+ l.scale=.15;let size=presetFootprint(s,l,1920,1080,meshPoint);near(size.width,172.8);near(size.height,97.2);assert.equal(presetLayout(c,size),'compact');
+ l.scale=1;s.corners=s.corners.map(p=>({x:.5+(p.x-.5)*.15,y:.5+(p.y-.5)*.15}));size=presetFootprint(s,l,1920,1080,meshPoint);near(size.width,172.8);near(size.height,97.2);assert.equal(presetLayout(c,size),'compact');
+ s.mesh=createMesh(s,3);l.rotation=90;assert.ok(Number.isFinite(presetFootprint(s,l,1920,1080,meshPoint).height));
+ c.layout='detailed';assert.equal(presetLayout(c,size),'detailed');c.layout='compact';assert.equal(presetLayout(c,{width:1920,height:1080}),'compact');delete c.layout;assert.ok(validatePreset(c));assert.equal(presetLayout(c,size),'compact');c.layout='invalid';assert.equal(Boolean(validatePreset(c)),false);
+});

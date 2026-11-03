@@ -1,14 +1,15 @@
+import {presetDefaults,validatePreset,PRESETS} from './presets.mjs';
 import {sampleCurve,pathNode,validateLEDPath,validateLED,animationTime} from './led.mjs';
 import polygonClipping from './vendor/polygon-clipping.mjs';
 export const uid = () => crypto.randomUUID();
 export const clone = value => structuredClone(value);
 export const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 export function newProject() {
-  return { version: 5, clock:{elapsed:0,startedAt:Date.now()}, name: 'Untitled mapping', width: 1920, height: 1080, surfaces: [], assets: [], blackout: false, calibration: false, isolate: null, playing: true };
+  return { version: 6, clock:{elapsed:0,startedAt:Date.now()}, name: 'Untitled mapping', width: 1920, height: 1080, surfaces: [], assets: [], blackout: false, calibration: false, isolate: null, playing: true };
 }
 export function newLayer(type, assetId = null) {
   return { id: uid(), type, assetId, name: type === 'text' ? 'Text' : type === 'color' ? 'Solid color' : type === 'grid' ? 'Alignment grid' : type,
-    visible: true, opacity: 1, fit: 'cover', scale: 1, scaleX:1,scaleY:1,keepAspect:true,rotation:0,mirrorX:false,mirrorY:false, x: 0, y: 0, color: '#51e2bc', text: 'YOUR TEXT', font: 'sans-serif', fontSize: 100, align: 'center', loop: true, speed: 1 };
+    ...(type==='preset'?{animation:presetDefaults(),name:PRESETS[0][1]}:{}),visible: true, opacity: 1, fit: 'cover', scale: 1, scaleX:1,scaleY:1,keepAspect:true,rotation:0,mirrorX:false,mirrorY:false, x: 0, y: 0, color: '#51e2bc', text: 'YOUR TEXT', font: 'sans-serif', fontSize: 100, align: 'center', loop: true, speed: 1 };
 }
 export function newSurface(type = 'quad', polygon = null) {
   let corners = [{ x: .2, y: .2 }, { x: .8, y: .2 }, { x: .8, y: .8 }, { x: .2, y: .8 }];
@@ -75,7 +76,7 @@ export function pointInPolygon(point, points) {
   return inside;
 }
 export function validateProject(value) {
-  if(!value||![1,2,3,4,5].includes(value.version)) throw new Error('Unsupported project format. Expected a Surface version 1 through 5 project.');
+  if(!value||![1,2,3,4,5,6].includes(value.version)) throw new Error('Unsupported project format. Expected a Surface version 1 through 6 project.');
   const num=(v,min,max) => typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
   const point=p=>p&&num(p.x,-10,10)&&num(p.y,-10,10);
   const polygon=p=>Array.isArray(p)&&p.length>=3&&p.length<=8192&&p.every(point);
@@ -104,8 +105,9 @@ export function validateProject(value) {
     if(!Array.isArray(s.holes)||s.holes.length>50||!s.holes.every(polygon)) throw new Error('Invalid exclusion mask.');
     if(s.mesh&&(!Number.isInteger(s.mesh.divisions)||s.mesh.divisions<1||s.mesh.divisions>12||!Array.isArray(s.mesh.points)||s.mesh.points.length!==(s.mesh.divisions+1)**2||!s.mesh.points.every(point))) throw new Error('Invalid warp mesh.');
     for(const l of s.layers) {
+      if(l?.type==='preset'&&!validatePreset(l.animation))throw new Error('Invalid animated preset settings.');
       if(['image','video'].includes(l?.type)&&!ids.has(l.assetId))throw new Error('Content references unknown media.');
-      if(!l||typeof l.id!=='string'||!['image','video','text','color','grid'].includes(l.type)||!num(l.opacity,0,1)||!num(l.scale,.05,10)||!num(l.x,-2,2)||!num(l.y,-2,2)||!num(l.fontSize,8,600)||!num(l.speed,.25,4)) throw new Error('Invalid content layer.');
+      if(!l||typeof l.id!=='string'||!['image','video','text','color','grid','preset'].includes(l.type)||!num(l.opacity,0,1)||!num(l.scale,.05,10)||!num(l.x,-2,2)||!num(l.y,-2,2)||!num(l.fontSize,8,600)||!num(l.speed,.25,4)) throw new Error('Invalid content layer.');
       if((l.scaleX!==undefined&&!num(l.scaleX,.05,10))||(l.scaleY!==undefined&&!num(l.scaleY,.05,10))||(l.keepAspect!==undefined&&typeof l.keepAspect!=='boolean'))throw new Error('Invalid media scale.');
       if((l.rotation!==undefined&&!num(l.rotation,-36000,36000))||(l.mirrorX!==undefined&&typeof l.mirrorX!=='boolean')||(l.mirrorY!==undefined&&typeof l.mirrorY!=='boolean'))throw new Error('Invalid content transform.');
       if(!['cover','contain','stretch'].includes(l.fit)||!['left','center','right'].includes(l.align)||typeof l.text!=='string'||l.text.length>20000||typeof l.font!=='string'||typeof l.color!=='string'||!/^#[0-9a-f]{6}$/i.test(l.color)) throw new Error('Invalid layer appearance.');

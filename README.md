@@ -2,10 +2,42 @@
 
 A local desktop app for tracing physical objects into projection zones. Built for Linux and Windows with Electron and WebGL. This is an early, usable prototype; real projector calibration and Windows hardware testing are still required.
 
+## Latest: 0.6.2
+
+- Six animated items: gauge, dial, control panel, scrolling code, radar, and oscilloscope.
+- Auto, Compact, and Detailed layouts, with larger readouts and fewer details in small projection zones.
+- Smooth scaling for reduced animated items, including transparent backgrounds.
+- Per-item speed, pause/restart, colors, direction, and automatic/manual readings.
+
+**Start here:** [Basic how-to](docs/QUICKSTART.md) · [Changes](CHANGELOG.md)
+
+![Surface editor with an animated control panel](docs/screenshots/workspace.png)
+
+### Animated items
+
+![Six built-in animated items](docs/screenshots/animated-items.png)
+
+### Small projection zones
+
+The same 176 × 100 pixel zone with Detailed layouts above and Compact layouts below:
+
+![Detailed and compact designs at the same size](docs/screenshots/compact-layouts.png)
+
+<details>
+<summary>Scaling comparison and LED-strip workspace</summary>
+
+![Linear filtering compared with smooth minification](docs/screenshots/scaling-comparison.png)
+
+![Editable LED strip with Bézier handles in minimal mode](docs/screenshots/led-strips.png)
+
+</details>
+
 ## Packaged builds
 
-- Linux: `release/0.5.2/Surface-0.5.2.AppImage`. Mark it executable if your file manager requires it. If FUSE is unavailable, run `./launch-linux.sh` to use the unpacked build.
-- Windows: `release/0.5.2/Surface Setup 0.5.2.exe`. Copy it to Windows and run the installer. It is unsigned and has not been tested on Windows hardware.
+The paths below refer to locally built packages. Installers, dependencies, generated test files, and personal projects are excluded from Git. For a fresh clone, use [Run from source](#run-from-source) or [build a package](#checks-and-builds).
+
+- Linux: `release/0.6.2/Surface-0.6.2.AppImage`. Mark it executable if your file manager requires it. If FUSE is unavailable, run `./launch-linux.sh` to use the unpacked build.
+- Windows: `release/0.6.2/Surface Setup 0.6.2.exe`. Copy it to Windows and run the installer. It is unsigned and has not been tested on Windows hardware.
 - The Linux AppImage passed the desktop test suite, including actual image/video decoding, projector pixels, portable saves, and missing-file relinking. Physical projector calibration still needs to be checked on your setup.
 
 ## Run from source
@@ -13,7 +45,9 @@ A local desktop app for tracing physical objects into projection zones. Built fo
 Install Node.js 22 or newer, then run:
 
 ```sh
-npm install
+git clone https://github.com/bizzomephisto/projectionmap.git
+cd projectionmap
+npm ci
 npm start
 ```
 
@@ -36,7 +70,7 @@ The projector shows content only. Calibration patterns are explicitly enabled. G
 
 Trace vertices appear immediately after finishing a trace. Drag them, use arrow keys to nudge, double-click an edge to insert a point, or use **＋ Point** / **− Point** in the inspector. Delete removes the selected outline point while retaining at least three vertices. Use **Corners** for perspective adjustment or **Warp** for mesh adjustment. Unwarped traces can expand beyond their original bounds; warped outline points stay within the existing mesh.
 
-New projects use format version 5. Existing version 1–4 projects still open; older versions of Surface cannot open version 5 projects. Keep a separate copy if you also need the older app.
+New projects use format version 6. Existing version 1–5 projects still open; older versions of Surface cannot open version 6 projects. Keep a separate copy if you also need the older app.
 
 ## Media, masks, transforms, and outlines
 
@@ -55,6 +89,20 @@ New projects use format version 5. Existing version 1–4 projects still open; o
 - **Fit handles** or **Home** zooms out to include the canvas and every selected surface's corners, warp nodes, and trace boundary. **Fit canvas** returns to the normal projector framing. Zoom and pan continue to work in both full and minimal interface modes. With Guides off, editing handles and indicators are hidden as before.
 - For an image/video layer, **Media width (%)** and **Media height (%)** resize the content inside the fixed mask (5–1000%). **Keep media proportions** links the two values; disable it for independent sizing. **Media zoom** remains an additional uniform multiplier.
 - **Fit mask to media** changes the mask itself. It keeps the current width, center, trace, cutouts, and warp topology, and adjusts height along the mask's own frame to the selected source's aspect ratio. This works for images and videos, including portrait media. It resets the selected layer's placement, zoom, X/Y size, and rotation so the source fits completely; other layers retain their settings. It is undoable. Perspective faces use their average frame axes as the aspect reference.
+
+## Animated items
+
+Choose an item from **Animated items** in the left panel, or **＋ Animated** in Content layers. With no selection, adding an item creates a surface. With a surface selected, it adds a content layer inside that mask; an initial alignment grid is replaced. LED strips must first use **Restore mask content**.
+
+Six built-in items: analog gauge, rotary dial, control panel, scrolling code screen, radar, and oscilloscope. They are decorative animations with simulated readings, not live telemetry. No external assets or controller are required. Scrolling code is display text only and never executes.
+
+**Layout** defaults to Auto: zones with a shorter projected edge below 220 output pixels use a compact design. Compact gauges have fewer ticks and a large integer readout; panels have fewer meters and larger indicators; code wraps into fewer large rows; radar and scope use bolder marks. Choose Compact or Detailed to override. Auto accounts for mask size, layer scale, rotation, and warp, and is independent of editor zoom. Existing animated projects adopt Auto unless a layout is saved.
+
+Animated surfaces use trilinear mipmap filtering and anisotropic filtering where supported, keeping fine strokes smooth when reduced or viewed in perspective. Very small labels still need enough physical projector pixels to be readable.
+
+Select an animated layer to choose its preset, label, speed (0.1–4×), direction, primary/accent/background colors, transparent background, labels, and detail/density. Automatic value sweeps between minimum and maximum; disable it to set a manual value for gauge needles, dial position, panel meters, radar target visibility, or waveform amplitude. Speed controls the whole item; code detail sets row density, dial/gauge detail sets ticks, and radar detail sets targets. Code screens accept custom multiline text.
+
+**Pause item / Restart item** controls the selected animation. Global Play/Pause and Restart control all animated items, LEDs, and videos. Animations share the editor/projector clock. Changing speed or pausing an item preserves its position. Saved projects retain settings and reopen with animation time reset. Layer transforms, opacity, stacking, surface warp, cutouts, isolation, calibration, and blackout apply normally. Duplicate keeps animation content; Copy masks deliberately omits content.
 
 ## LED strips and Bézier paths
 
@@ -76,7 +124,7 @@ Closed Bézier paths also work as ordinary media masks. Use the same point contr
 
 - Independent surfaces with four-corner perspective mapping, polygon and elliptical masks, and editable warp meshes.
 - Polygon exclusion masks, surface isolation, visibility, locking, duplication, and stacking.
-- Image, video, multiline text, color, and grid content layers.
+- Image, video, multiline text, color, grid, and six built-in animated content layers.
 - Fit/fill/stretch, layer position/scale/opacity, surface brightness, and text appearance controls.
 - Traced LED strips, editable Bézier tangents, calibrated density, and 20 WLED-style local effects.
 - Global animation play/pause/restart; video looping and speed controls.
@@ -114,7 +162,7 @@ Closed Bézier paths also work as ordinary media masks. Use the same point contr
 | Tab | Toggle minimal interface |
 | Double-click outline edge | Insert a vertex |
 | Delete | Remove selected outline point; otherwise remove the selected content layer when its layer row is active, or delete the selected unlocked surface |
-| Space | Play/pause videos and LED effects |
+| Space | Play/pause animated items, videos, and LED effects |
 | B | Blackout |
 | Home / Fit handles | Reveal the canvas and selected offscreen handles |
 | Scroll / middle drag | Zoom / pan editor |
@@ -123,6 +171,7 @@ Closed Bézier paths also work as ordinary media masks. Use the same point contr
 
 ```sh
 npm test                 # Geometry, validation, and undo/redo
+npm run test:rendering   # Small-preset filtering against area-downsampled reference
 npm run test:desktop     # Real Electron UI, media, persistence, and output checks (desktop + ffmpeg required)
 npm run pack             # Unpacked app for the current OS
 npm run dist:linux       # Linux AppImage
@@ -131,7 +180,7 @@ npm run dist:windows     # Windows NSIS installer (run on Windows)
 
 The workspace also includes `launch-linux.sh` and `launch-windows.cmd` launchers. The Linux launcher prefers an existing packaged build.
 
-Build outputs go in `release/0.5.2/`. Older builds are preserved. Dependencies are development-only; no web server, account, or cloud service is required to use the app.
+Build outputs go in `release/0.6.2/`. Older builds are preserved. Dependencies are development-only; no web server, account, or cloud service is required to use the app.
 
 ## Structure
 
@@ -139,6 +188,7 @@ Build outputs go in `release/0.5.2/`. Older builds are preserved. Dependencies a
 - `electron/preload.cjs`: narrow desktop bridge, with renderer Node access disabled and isolation/sandboxing enabled.
 - `src/core.mjs`: project data, homography, warp geometry, validation, and history.
 - `src/renderer.mjs`: content compositing and shared WebGL projection renderer.
+- `src/presets.mjs`: animated item designs, compact layouts, sizing, and per-item clocks.
 - `src/led.mjs`, `src/led-shaders.mjs`: curve geometry, strip density, shared animation clock, and independent LED effect shaders.
 - `src/app.mjs`: editing interactions and workspace state.
 - `src/output.mjs`: clean projector output using the same rendering pipeline.

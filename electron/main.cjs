@@ -1,3 +1,4 @@
+const resetPresetClocks=project=>{for(const s of project.surfaces)for(const l of s.layers)if(l.type==='preset'){l.animation.offset=0;l.animation.anchor=0;}};
 const { app, BrowserWindow, ipcMain, dialog, screen, protocol, net, Menu, clipboard } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -28,7 +29,7 @@ async function saveProject(project, saveAs=false) {
   const assetDir=path.basename(target).replace(/\.json$/i,'')+'.assets';
   await fs.mkdir(path.join(path.dirname(target),assetDir),{recursive:true});
   const saved=structuredClone(project);
-  saved.clock={elapsed:0,startedAt:0};saved.blackout=false;saved.calibration=false;saved.isolate=null;
+  resetPresetClocks(saved);saved.clock={elapsed:0,startedAt:0};saved.blackout=false;saved.calibration=false;saved.isolate=null;
   for(const asset of saved.assets){
     const entry=media.get(asset.id);
     if(!entry)throw new Error(`Relink missing media before saving: ${asset.name}`);
@@ -91,7 +92,7 @@ ipcMain.handle('load-project',async(event)=>{
     asset.url=`surface://app/media/${encodeURIComponent(asset.id)}?v=${randomUUID()}`;asset.missing=false;
     try{if(!(await fs.stat(resolved)).isFile())throw new Error();nextMedia.set(asset.id,{path:resolved,type:asset.type});}catch{asset.missing=true;}
   }
-  media=nextMedia;projectPath=file;project.clock={elapsed:0,startedAt:Date.now()};project.blackout=false;project.calibration=false;project.isolate=null;
+  media=nextMedia;projectPath=file;resetPresetClocks(project);project.clock={elapsed:0,startedAt:Date.now()};project.blackout=false;project.calibration=false;project.isolate=null;
   return {project,path:file};
 });
 ipcMain.handle('new-project',event=>{if(isEditor(event)){projectPath=null;media.clear();return true;}return false;});
